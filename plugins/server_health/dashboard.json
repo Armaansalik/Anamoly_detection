@@ -1,0 +1,15 @@
+{
+  "widgets": [
+    {"type": "line", "title": "CPU", "metric": "cpu", "unit": "%"},
+    {"type": "line", "title": "Memory", "metric": "memory", "unit": "%"},
+    {"type": "line", "title": "Latency", "metric": "latency_ms", "unit": "ms"}
+  ],
+  "alerts": [
+    {"metric": "cpu", "severity": "medium", "when": "warn"},
+    {"metric": "cpu", "severity": "high", "when": "critical"},
+    {"metric": "memory", "severity": "medium", "when": "warn"},
+    {"metric": "memory", "severity": "high", "when": "critical"},
+    {"metric": "latency_ms", "severity": "medium", "when": "warn"},
+    {"metric": "latency_ms", "severity": "high", "when": "critical"}
+  ]
+}

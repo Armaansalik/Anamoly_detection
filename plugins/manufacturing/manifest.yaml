@@ -1,0 +1,32 @@
+name: manufacturing
+display_name: Manufacturing Machinery
+description: MSME factory machinery monitoring (temperature, vibration, current, RPM)
+
+metrics:
+  temperature:
+    unit: C
+    warn: 85.0
+    critical: 95.0
+  vibration:
+    unit: mm/s
+    warn: 4.5
+    critical: 7.1
+  current:
+    unit: A
+    warn: 15.0
+    critical: 18.0
+  rpm:
+    unit: rpm
+    warn: 1750.0
+    critical: 1850.0
+
+actions:
+  - id: alert_operator
+    risk: low
+    description: Notify the operator on the dashboard and sound an audible alert
+  - id: throttle_motor
+    risk: low
+    description: Reduce motor speed by 20% to protect the machine
+  - id: restart_process
+    risk: high
+    description: Restart the production process (requires human approval)

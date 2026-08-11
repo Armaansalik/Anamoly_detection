@@ -1,0 +1,14 @@
+{
+  "widgets": [
+    {"type": "line", "title": "Temperature", "metric": "temperature", "unit": "C"},
+    {"type": "line", "title": "Vibration", "metric": "vibration", "unit": "mm/s"},
+    {"type": "line", "title": "Current", "metric": "current", "unit": "A"},
+    {"type": "gauge", "title": "Motor Speed", "metric": "rpm", "unit": "rpm"}
+  ],
+  "alerts": [
+    {"metric": "temperature", "severity": "medium", "when": "warn"},
+    {"metric": "temperature", "severity": "high", "when": "critical"},
+    {"metric": "vibration", "severity": "medium", "when": "warn"},
+    {"metric": "vibration", "severity": "high", "when": "critical"}
+  ]
+}

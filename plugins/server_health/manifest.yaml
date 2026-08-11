@@ -1,0 +1,25 @@
+name: server_health
+display_name: Server Health
+description: Infrastructure monitoring (CPU, memory, latency) — a structurally different domain proving the plugin architecture
+
+metrics:
+  cpu:
+    unit: "%"
+    warn: 80.0
+    critical: 92.0
+  memory:
+    unit: "%"
+    warn: 85.0
+    critical: 95.0
+  latency_ms:
+    unit: ms
+    warn: 250.0
+    critical: 500.0
+
+actions:
+  - id: alert_operator
+    risk: low
+    description: Notify the ops team on the dashboard
+  - id: restart_service
+    risk: high
+    description: Restart the failing service (requires human approval)

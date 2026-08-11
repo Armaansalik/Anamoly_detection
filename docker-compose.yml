@@ -1,0 +1,34 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sentinel-backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      SENTINEL_DATABASE_PATH: /app/data/sentinel.db
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: sentinel-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: sentinel-mqtt
+    ports:
+      - "1883:1883"
+    profiles: ["broker"]
+    restart: unless-stopped
