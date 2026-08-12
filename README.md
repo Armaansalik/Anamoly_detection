@@ -5,6 +5,10 @@
 The core engine is **plugin-based**: manufacturing, server health, cold-chain, fraud — any domain is a plugin folder (`manifest.yaml` + `adapter.py` + `actions.py` + `dashboard.json`). The core never changes when a new domain joins.
 
 > Full build specification: [`docs/ANOMALY_AGENT_FULL_BUILD_SPEC.md`](docs/ANOMALY_AGENT_FULL_BUILD_SPEC.md)
+>
+> **Non-technical? Read this first:** [`docs/PLAIN_ENGLISH_GUIDE.md`](docs/PLAIN_ENGLISH_GUIDE.md) — what it does in plain language, ML terms translated, and what's new vs. existing tools.
+>
+> **Stakeholders / judges:** [`docs/PROJECT_MANAGEMENT_PLAN.md`](docs/PROJECT_MANAGEMENT_PLAN.md) — charter, requirements, milestones, risks, KPIs, acceptance criteria.
 
 ---
 
