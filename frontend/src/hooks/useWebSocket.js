@@ -11,8 +11,7 @@ export function useWebSocket(onMessage) {
     let retryTimer = null;
 
     const connect = () => {
-      const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
-      const ws = new WebSocket(`${proto}://${window.location.host}/ws`);
+      const ws = new WebSocket('ws://localhost:8000/ws');
       wsRef.current = ws;
 
       ws.onopen = () => setConnected(true);
