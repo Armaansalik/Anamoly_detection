@@ -174,6 +174,13 @@ async def retrain() -> Dict[str, Any]:
     return {"retrained": count}
 
 
+@app.get("/api/v1/stats")
+async def stats() -> Dict[str, Any]:
+    data = store.get_stats()
+    data["sources"] = pipeline.sources_status()
+    return data
+
+
 @app.get("/api/v1/drift")
 async def drift() -> Dict[str, Any]:
     return {"records": store.list_drift()}

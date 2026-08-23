@@ -63,6 +63,25 @@ CREATE TABLE IF NOT EXISTS drift_records (
     recommendation TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS user_config (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS metrics_aggregation (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_id TEXT NOT NULL,
+    metric_name TEXT NOT NULL,
+    hour TEXT NOT NULL,
+    min_val REAL,
+    max_val REAL,
+    avg_val REAL,
+    sample_count INTEGER NOT NULL DEFAULT 0,
+    UNIQUE(source_id, metric_name, hour)
+);
+CREATE INDEX IF NOT EXISTS idx_metrics_agg_hour ON metrics_aggregation (hour);
 """
 
 
@@ -233,4 +252,56 @@ class SQLiteStore:
                 "INSERT INTO drift_records (source_id, metric_name, kl, recommendation, created_at) "
                 "VALUES (?, ?, ?, ?, ?)",
                 (source_id, metric_name, kl, recommendation, _now()),
+            )
+
+    # ----------------------------------------------------------- stats
+    def get_stats(self) -> Dict[str, Any]:
+        with self._conn() as conn:
+            total = conn.execute("SELECT COUNT(*) FROM incidents").fetchone()[0]
+            pending = conn.execute("SELECT COUNT(*) FROM incidents WHERE status = 'pending_approval'").fetchone()[0]
+            resolved = conn.execute("SELECT COUNT(*) FROM incidents WHERE status IN ('executed','rolled_back')").fetchone()[0]
+            open_inc = conn.execute("SELECT COUNT(*) FROM incidents WHERE status = 'open'").fetchone()[0]
+            rejected = conn.execute("SELECT COUNT(*) FROM incidents WHERE status = 'rejected'").fetchone()[0]
+            high = conn.execute("SELECT COUNT(*) FROM incidents WHERE severity = 'high'").fetchone()[0]
+            medium = conn.execute("SELECT COUNT(*) FROM incidents WHERE severity = 'medium'").fetchone()[0]
+            drift_count = conn.execute("SELECT COUNT(*) FROM drift_records").fetchone()[0]
+            source_count = conn.execute("SELECT COUNT(DISTINCT source_id) FROM events").fetchone()[0]
+            event_count = conn.execute("SELECT COUNT(*) FROM events").fetchone()[0]
+            audit_count = conn.execute("SELECT COUNT(*) FROM audit_log").fetchone()[0]
+        return {
+            "total_incidents": total,
+            "pending_approval": pending,
+            "resolved": resolved,
+            "open": open_inc,
+            "rejected": rejected,
+            "high_severity": high,
+            "medium_severity": medium,
+            "drift_records": drift_count,
+            "source_count": source_count,
+            "total_events": event_count,
+            "audit_entries": audit_count,
+        }
+
+    def upsert_config(self, key: str, value: str) -> None:
+        with self._conn() as conn:
+            conn.execute(
+                "INSERT INTO user_config (key, value, updated_at) VALUES (?, ?, ?) "
+                "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
+                (key, value, _now()),
+            )
+
+    def get_config(self, key: str) -> Optional[str]:
+        with self._conn() as conn:
+            row = conn.execute("SELECT value FROM user_config WHERE key = ?", (key,)).fetchone()
+        return row["value"] if row else None
+
+    def insert_metrics_aggregation(self, source_id: str, metric_name: str, hour: str,
+                                    min_val: float, max_val: float, avg_val: float, count: int) -> None:
+        with self._conn() as conn:
+            conn.execute(
+                "INSERT INTO metrics_aggregation (source_id, metric_name, hour, min_val, max_val, avg_val, sample_count) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(source_id, metric_name, hour) DO UPDATE SET "
+                "min_val=excluded.min_val, max_val=excluded.max_val, avg_val=excluded.avg_val, sample_count=excluded.sample_count",
+                (source_id, metric_name, hour, min_val, max_val, avg_val, count),
             )
