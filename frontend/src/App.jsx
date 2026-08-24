@@ -87,6 +87,7 @@ export default function App() {
   return (
     <div className="app">
       <div className="header">
+        <span className="logo-icon" title="SentinelAgent">&#x1F6E1;</span>
         <h1>SentinelAgent</h1>
         <span className="subtitle">Autonomous anomaly detection &amp; self-healing agent</span>
         <div className="spacer" />
