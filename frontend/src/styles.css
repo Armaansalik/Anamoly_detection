@@ -519,6 +519,16 @@ body {
 .btn:active { transform: translateY(0) scale(0.97); }
 .btn:disabled { opacity: 0.5; cursor: default; transform: none; }
 
+.btn-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(0,0,0,0.2);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
 .btn.approve { background: linear-gradient(135deg, var(--success), #16a34a); color: #052e16; }
 .btn.approve:hover { box-shadow: 0 6px 20px rgba(34,197,94,0.35); }
 .btn.reject { background: linear-gradient(135deg, var(--danger), #dc2626); color: #2a0505; }
