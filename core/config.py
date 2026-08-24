@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     mqtt_port: int = 1883
     mqtt_topic: str = "sentinel/events"
 
+    jwt_enabled: bool = False
+    jwt_secret: str = ""
+
     ws_origin: str = "*"
 
     @property

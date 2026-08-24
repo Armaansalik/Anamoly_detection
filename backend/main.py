@@ -14,19 +14,30 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from typing import Annotated
 
 from backend import explanations
 from backend.actions_executor import ActionExecutor
 from backend.agent import ReasoningAgent
+from backend.auth import (
+    authenticate_request,
+    create_token,
+    verify_password,
+    DEFAULT_USERS,
+)
 from backend.detection import AnomalyPipeline
 from backend.hub import StreamingHub
 from backend.storage import SQLiteStore
 from core.config import get_settings
 from core.logging import get_logger, setup_logging
 from core.plugin_loader import PluginRegistry
+
+from backend.mqtt_ingestor import MQTTIngestor
 
 settings = get_settings()
 log = get_logger("sentinel.api")
@@ -37,11 +48,12 @@ hub: StreamingHub
 pipeline: AnomalyPipeline
 agent: ReasoningAgent
 executor: ActionExecutor
+mqtt_ingestor: Optional[MQTTIngestor] = None
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    global registry, store, hub, pipeline, agent, executor
+    global registry, store, hub, pipeline, agent, executor, mqtt_ingestor
     setup_logging(settings.log_level)
     registry = PluginRegistry().load()
     store = SQLiteStore(settings.db_path)
@@ -49,18 +61,47 @@ async def lifespan(_: FastAPI):
     agent = ReasoningAgent(store, registry, settings)
     executor = ActionExecutor(store, hub, registry)
     pipeline = AnomalyPipeline(store, hub, registry, settings)
-    log.info("SentinelAgent started", extra={"plugins": list(registry.plugins), "db": str(settings.db_path)})
+    mqtt_ingestor = MQTTIngestor(settings, registry, pipeline, store)
+    mqtt_ingestor.start()
+    log.info("SentinelAgent started", extra={"plugins": list(registry.plugins), "db": str(settings.db_path), "mqtt": settings.mqtt_enabled})
+    yield
+    if mqtt_ingestor:
+        mqtt_ingestor.stop()
     yield
 
 
-app = FastAPI(title="SentinelAgent", version="1.0.0", lifespan=lifespan)
+app = FastAPI(
+    title="SentinelAgent",
+    version="1.0.0",
+    description="Autonomous Anomaly Detection & Self-Healing Agent Platform for MSME Factories",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    lifespan=lifespan,
+)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:5173", "http://localhost:5174", "http://localhost:5175", "http://127.0.0.1:5173"],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["*"],
+    max_age=600,
 )
+
+
+@app.middleware("http")
+async def security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    return response
+
+
+@app.middleware("http")
+async def rate_limit_middleware(request, call_next):
+    return await call_next(request)
 
 
 # ------------------------------------------------------------------ models
@@ -88,10 +129,38 @@ class ChatIn(BaseModel):
     source_id: Optional[str] = None
 
 
+class LoginIn(BaseModel):
+    username: str
+    password: str
+
+
+class LoginOut(BaseModel):
+    token: str
+    user: str
+    role: str
+    display_name: str
+
+
+async def require_auth(authorization: Optional[str] = Header(None)):
+    user = authenticate_request(authorization)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Unauthorized — valid Bearer token required")
+    return user
+
+
 # ------------------------------------------------------------------ health
 @app.get("/health")
 async def health() -> Dict[str, Any]:
     return {"status": "ok", "plugins": list(registry.plugins)}
+
+
+@app.post("/api/v1/auth/login", response_model=LoginOut)
+async def login(body: LoginIn) -> LoginOut:
+    user = DEFAULT_USERS.get(body.username)
+    if not user or not verify_password(body.password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    token = create_token({"sub": body.username, "role": user["role"]})
+    return LoginOut(token=token, user=body.username, role=user["role"], display_name=user["display_name"])
 
 
 @app.get("/api/v1/plugins")
@@ -184,6 +253,28 @@ async def stats() -> Dict[str, Any]:
 @app.get("/api/v1/drift")
 async def drift() -> Dict[str, Any]:
     return {"records": store.list_drift()}
+
+
+@app.get("/api/v1/models")
+async def list_models() -> Dict[str, Any]:
+    from backend.model_store import ModelStore
+    ms = ModelStore()
+    return {"models": ms.list_models(), "count": len(ms.list_models())}
+
+
+@app.get("/api/v1/sensors/mqtt/status")
+async def mqtt_status() -> Dict[str, Any]:
+    enabled = settings.mqtt_enabled
+    connected = mqtt_ingestor._running if mqtt_ingestor else False
+    return {"enabled": enabled, "connected": connected, "broker": settings.mqtt_broker, "port": settings.mqtt_port}
+
+
+@app.post("/api/v1/sensors/mqtt/publish")
+async def mqtt_publish(topic: str, payload: str) -> Dict[str, Any]:
+    if mqtt_ingestor and mqtt_ingestor._client and mqtt_ingestor._running:
+        mqtt_ingestor._client.publish(topic, payload)
+        return {"published": True, "topic": topic}
+    return {"published": False, "reason": "MQTT not connected"}
 
 
 # -------------------------------------------------------------------- ws
